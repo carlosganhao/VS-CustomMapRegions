@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "Regioner",
+    "regions-alpha": "Transparens",
+    "regions-brush-size": "Penselstorlek",
+    "regions-lock-region": "Lås region",
+    "regions-dlg-add-title": "Lägg till region",
+    "regions-dlg-edit-title": "Redigera region",
+    "regions-dlg-name": "Namn",
+    "regions-dlg-color": "Färg",
+    "regions-dlg-fill": "Fyllmönster",
+    "regions-dlg-cancel": "Avbryt",
+    "regions-dlg-delete": "Ta bort",
+    "regions-dlg-save": "Spara"
+}

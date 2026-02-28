@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "Регионы",
+    "regions-alpha": "Прозрачность",
+    "regions-brush-size": "Размер кисти",
+    "regions-lock-region": "Заблокировать регион",
+    "regions-dlg-add-title": "Добавить регион",
+    "regions-dlg-edit-title": "Редактировать регион",
+    "regions-dlg-name": "Имя",
+    "regions-dlg-color": "Цвет",
+    "regions-dlg-fill": "Шаблон заполнения",
+    "regions-dlg-cancel": "Отмена",
+    "regions-dlg-delete": "Удалить",
+    "regions-dlg-save": "Сохранить"
+}

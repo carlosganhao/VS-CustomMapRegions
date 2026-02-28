@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "ภูมิภาค",
+    "regions-alpha": "ความโปร่งใส",
+    "regions-brush-size": "ขนาดแปรง",
+    "regions-lock-region": "ล็อคพื้นที่",
+    "regions-dlg-add-title": "เพิ่มพื้นที่",
+    "regions-dlg-edit-title": "แก้ไขพื้นที่",
+    "regions-dlg-name": "ชื่อ",
+    "regions-dlg-color": "สี",
+    "regions-dlg-fill": "ลวดลายเติม",
+    "regions-dlg-cancel": "ยกเลิก",
+    "regions-dlg-delete": "ลบ",
+    "regions-dlg-save": "บันทึก"
+}

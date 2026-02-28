@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "区域",
+    "regions-alpha": "透明度",
+    "regions-brush-size": "画笔大小",
+    "regions-lock-region": "锁定区域",
+    "regions-dlg-add-title": "添加区域",
+    "regions-dlg-edit-title": "编辑区域",
+    "regions-dlg-name": "名称",
+    "regions-dlg-color": "颜色",
+    "regions-dlg-fill": "填充图案",
+    "regions-dlg-cancel": "取消",
+    "regions-dlg-delete": "删除",
+    "regions-dlg-save": "保存"
+}

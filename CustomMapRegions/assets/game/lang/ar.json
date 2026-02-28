@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "المناطق",
+    "regions-alpha": "الشفافية",
+    "regions-brush-size": "حجم الفرشاة",
+    "regions-lock-region": "قفل المنطقة",
+    "regions-dlg-add-title": "إضافة منطقة",
+    "regions-dlg-edit-title": "تحرير المنطقة",
+    "regions-dlg-name": "الاسم",
+    "regions-dlg-color": "اللون",
+    "regions-dlg-fill": "نمط التعبئة",
+    "regions-dlg-cancel": "إلغاء",
+    "regions-dlg-delete": "حذف",
+    "regions-dlg-save": "حفظ"
+}

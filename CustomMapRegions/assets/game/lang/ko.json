@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "지역",
+    "regions-alpha": "투명도",
+    "regions-brush-size": "브러시 크기",
+    "regions-lock-region": "영역 잠금",
+    "regions-dlg-add-title": "영역 추가",
+    "regions-dlg-edit-title": "영역 편집",
+    "regions-dlg-name": "이름",
+    "regions-dlg-color": "색상",
+    "regions-dlg-fill": "채우기 패턴",
+    "regions-dlg-cancel": "취소",
+    "regions-dlg-delete": "삭제",
+    "regions-dlg-save": "저장"
+}

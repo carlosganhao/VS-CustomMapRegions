@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "Alueet",
+    "regions-alpha": "Läpinäkyvyys",
+    "regions-brush-size": "Siveltimen koko",
+    "regions-lock-region": "Lukitse alue",
+    "regions-dlg-add-title": "Lisää alue",
+    "regions-dlg-edit-title": "Muokkaa aluetta",
+    "regions-dlg-name": "Nimi",
+    "regions-dlg-color": "Väri",
+    "regions-dlg-fill": "Täyttökuvio",
+    "regions-dlg-cancel": "Peruuta",
+    "regions-dlg-delete": "Poista",
+    "regions-dlg-save": "Tallenna"
+}

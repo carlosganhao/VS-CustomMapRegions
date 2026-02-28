@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "Régions",
+    "regions-alpha": "Transparence",
+    "regions-brush-size": "Taille du pinceau",
+    "regions-lock-region": "Verrouiller la région",
+    "regions-dlg-add-title": "Ajouter une région",
+    "regions-dlg-edit-title": "Modifier la région",
+    "regions-dlg-name": "Nom",
+    "regions-dlg-color": "Couleur",
+    "regions-dlg-fill": "Motif de remplissage",
+    "regions-dlg-cancel": "Annuler",
+    "regions-dlg-delete": "Supprimer",
+    "regions-dlg-save": "Enregistrer"
+}

@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "Регіони",
+    "regions-alpha": "Прозорість",
+    "regions-brush-size": "Розмір пензля",
+    "regions-lock-region": "Заблокувати регіон",
+    "regions-dlg-add-title": "Додати регіон",
+    "regions-dlg-edit-title": "Редагувати регіон",
+    "regions-dlg-name": "Назва",
+    "regions-dlg-color": "Колір",
+    "regions-dlg-fill": "Шаблон заповнення",
+    "regions-dlg-cancel": "Скасувати",
+    "regions-dlg-delete": "Видалити",
+    "regions-dlg-save": "Зберегти"
+}

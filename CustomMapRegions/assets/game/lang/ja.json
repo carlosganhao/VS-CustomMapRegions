@@ -1,0 +1,14 @@
+{
+    "maplayer-regions": "地域",
+    "regions-alpha": "透明度",
+    "regions-brush-size": "ブラシサイズ",
+    "regions-lock-region": "領域をロック",
+    "regions-dlg-add-title": "領域を追加",
+    "regions-dlg-edit-title": "領域を編集",
+    "regions-dlg-name": "名前",
+    "regions-dlg-color": "色",
+    "regions-dlg-fill": "塗りつぶしパターン",
+    "regions-dlg-cancel": "キャンセル",
+    "regions-dlg-delete": "削除",
+    "regions-dlg-save": "保存"
+}
