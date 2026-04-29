@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using CustomMapRegions.Common;
+using CustomMapRegions.Common.Models;
 using Vintagestory.API.Client;
 using Vintagestory.API.Config;
 using Vintagestory.API.Util;
@@ -17,17 +17,21 @@ public class GuiEditRegionDialog : GuiDialogGeneric
     private RegionMapLayer _mapLayer;
     private Region _regionToEdit;
     private RegionMapComponent _component;
+    private bool _allowUpdate;
+    private bool _allowDeletion;
     private string _curName;
     private int _curColor;
     private string _curFill;
     private int[] _colors;
     private string[] _fills;
 
-    public GuiEditRegionDialog(ICoreClientAPI capi, RegionMapLayer mapLayer, RegionMapComponent comp) : base("Edit Region", capi)
+    public GuiEditRegionDialog(ICoreClientAPI capi, RegionMapLayer mapLayer, RegionMapComponent comp, bool allowUpdate, bool allowDeletion) : base("Edit Region", capi)
     {
         _mapLayer = mapLayer;
         _regionToEdit = comp.Region;
         _component = comp;
+        _allowUpdate = allowUpdate;
+        _allowDeletion = allowDeletion;
         _colors = _mapLayer.AvailableColors.ToArray();
         _fills = _mapLayer.FillIcons.Keys.ToArray();
     }
@@ -91,13 +95,33 @@ public class GuiEditRegionDialog : GuiDialogGeneric
                 .AddIconListPicker(_fills, onFillSelected, leftColumn = leftColumn.BelowCopy(0, 5).WithFixedSize(colorIconSize+5, colorIconSize+5), 270, "fillpicker")
 
                 .AddSmallButton(Lang.Get("regions-dlg-cancel"), onCancel, buttonRow.FlatCopy().FixedUnder(leftColumn, 0).WithFixedWidth(100), EnumButtonStyle.Normal)
-                .AddSmallButton(Lang.Get("regions-dlg-delete"), onDelete, buttonRow.FlatCopy().FixedUnder(leftColumn, 0).WithFixedWidth(100).WithAlignment(EnumDialogArea.CenterFixed), EnumButtonStyle.Normal)
-                .AddSmallButton(Lang.Get("regions-dlg-save"), onSave, buttonRow.FlatCopy().FixedUnder(leftColumn, 0).WithFixedWidth(100).WithAlignment(EnumDialogArea.RightFixed), EnumButtonStyle.Normal, key: "saveButton")
+                .AddIf(_allowDeletion)
+                    .AddSmallButton(Lang.Get("regions-dlg-delete"), onDelete, buttonRow.FlatCopy().FixedUnder(leftColumn, 0).WithFixedWidth(100).WithAlignment(EnumDialogArea.CenterFixed), EnumButtonStyle.Normal)
+                .EndIf()
+                .AddIf(_allowUpdate)
+                    .AddSmallButton(Lang.Get("regions-dlg-save"), onSave, buttonRow.FlatCopy().FixedUnder(leftColumn, 0).WithFixedWidth(100).WithAlignment(EnumDialogArea.RightFixed), EnumButtonStyle.Normal, key: "saveButton")
+                .EndIf()
             .EndChildElements()
             .Compose()
         ;
 
-        SingleComposer.GetButton("saveButton").Enabled = false;
+        if(_allowUpdate)
+        {
+            SingleComposer.GetButton("saveButton").Enabled = false;
+        }
+        else
+        {
+            SingleComposer.GetTextInput("nameInput").Enabled = false;
+            for(int i = 0; i < _colors.Length; i++)
+            {
+                SingleComposer.GetColorListPicker($"colorpicker-{i}").Enabled = false;
+            }
+
+            for(int i = 0; i < _fills.Length; i++)
+            {
+                SingleComposer.GetIconListPicker($"fillpicker-{i}").Enabled = false;
+            }
+        }
 
         SingleComposer.GetTextInput("nameInput").SetValue(_regionToEdit.Name);
         SingleComposer.ColorListPickerSetValue("colorpicker", curColorIndex);
@@ -106,6 +130,7 @@ public class GuiEditRegionDialog : GuiDialogGeneric
 
     private void onNameChanged(string text)
     {
+        if(!_allowUpdate) return;
         SingleComposer.GetButton("saveButton").Enabled = text.Trim() != "";
         _curName = text;
         _component.TempUpdate(_curName, _curColor, _curFill);
@@ -113,12 +138,14 @@ public class GuiEditRegionDialog : GuiDialogGeneric
 
     private void onColorSelected(int index)
     {
+        if(!_allowUpdate) return;
         _curColor = _colors[index];
         _component.TempUpdate(_curName, _curColor, _curFill);
     }
 
     private void onFillSelected(int index)
     {
+        if(!_allowUpdate) return;
         _curFill = _fills[index];
         _component.TempUpdate(_curName, _curColor, _curFill);
     }

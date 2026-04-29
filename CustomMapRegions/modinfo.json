@@ -1,15 +1,16 @@
 {
     "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
     "type": "Code",
-    "side": "Client",
+    "side": "Universal",
     "modid": "custommapregions",
     "name": "Custom Map Regions",
     "authors": [
         "cooli2"
     ],
     "description": "Give names to areas, create user drawn regions on your map.",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "dependencies": {
         "game": "1.21.0"
-    }
+    },
+    "requiredOnServer": false
 }

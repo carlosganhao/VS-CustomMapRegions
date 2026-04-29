@@ -4,33 +4,33 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Cairo;
-using CustomMapRegions.Common;
+using CustomMapRegions.Client.Abstractions;
+using CustomMapRegions.Client.Storage;
+using CustomMapRegions.Common.Models;
 using CustomMapRegions.Config;
-using CustomMapRegions.Extensions;
-using CustomMapRegions.Infrastructure;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
-using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
 using Vintagestory.Client.NoObf;
 using Vintagestory.GameContent;
-using Region = CustomMapRegions.Common.Region;
+using Region = CustomMapRegions.Common.Models.Region;
 
 namespace CustomMapRegions.Client;
 
 public class RegionMapLayer : MapLayer
 {
-    public static readonly int MaxGenRetries = 3;
     public override string Title => "Regions";
     public override string LayerGroupCode => "regions";
     public override EnumMapAppSide DataSide => EnumMapAppSide.Client;
+
     public List<int> AvailableColors = new();
     public Dictionary<string, CreateIconTextureDelegate> FillIcons = new();
     public Dictionary<string, LoadedTexture> TexturesByFill = new();
     public MeshRef QuadModel;
     public Guid SelectedComponentId;
+    public IClientPlayer Player;
 
     private ClientCoreAPI capi;
     private static string[] _hexcolors = new string[36]
@@ -41,14 +41,6 @@ public class RegionMapLayer : MapLayer
         "#4F4C2B", "#BF9C86", "#9885530", "#5D3D21", "#FFFFFF", "#080504"
     };
 
-    private object _chunksToGenLock = new();
-    private UniqueQueue<FastVec2i> _chunksToGen = new();
-    private object _chunksToSendLock = new();
-    private UniqueQueue<ChunkRegionOp> _chunksToSend = new();
-    private object _regionsToSendLock = new();
-    private UniqueQueue<RegionOp> _regionsToSend = new();
-    private object _chunksToRetryLock = new();
-    private UniqueQueue<RetryChunkOp> _chunksToRetry = new();
     private ConcurrentQueue<ChunkRegion> _readyChunks = new();
     private HashSet<FastVec2i> _visibleChunks = new();
 
@@ -59,8 +51,7 @@ public class RegionMapLayer : MapLayer
     private GuiAddRegionDialog _addDialog;
     private GuiEditRegionDialog _editDialog;
     private CustomMapRegionsConfig _config = ConfigManager.ConfigInstance;
-    private RegionDB _regionDB;
-    private MapDB _mapDB;
+    private AbstractClientStorage _regionStorage;
     private FastVec2i _currentMouseChunkPos;
     public string getRegionDbFilePath()
     {
@@ -75,24 +66,12 @@ public class RegionMapLayer : MapLayer
         if (api.Side == EnumAppSide.Client)
         {
             capi = (ClientCoreAPI)api;
-            capi.Event.ChunkDirty += OnChunkDirty;
+            Player = capi.World.Player;
 
-            _regionDB = new RegionDB(api.World.Logger);
-            string errorMessage = null;
-            string regionDbFilePath = getRegionDbFilePath();
-            _regionDB.OpenOrCreate(regionDbFilePath, ref errorMessage, true, true, false);
-            if (errorMessage != null)
-            {
-                throw new Exception(string.Format("Cannot open {0}, possibly corrupted. Please fix manually or delete this file to continue playing", regionDbFilePath));
-            }
-
-            var mapManager = api.ModLoader.GetModSystem<WorldMapManager>();
-            var chunkLayer = mapManager.MapLayers.Find(x => x is ChunkMapLayer) as ChunkMapLayer;
-            if (chunkLayer != null)
-            {
-                _mapDB = chunkLayer.GetTerrainMapDb();
-                _mapDB.SetupExtensionCommands();
-            }
+            _regionStorage = ClientStorageFactory.BuildClientStorage(capi);
+            _regionStorage.onChunkRegionsRecieved += OnReadyChunks;
+            _regionStorage.onRegionsUpdated += OnRegionsUpdated;
+            _regionStorage.onRegionsDeleted += OnRegionsDeleted;
 
             foreach (var hex in _hexcolors)
             {
@@ -136,13 +115,7 @@ public class RegionMapLayer : MapLayer
     {
         ResetChunkComponents();
 
-        lock(_chunksToGenLock)
-        {
-            foreach (var chunkCoord in _visibleChunks)
-            {
-                _chunksToGen.Enqueue(chunkCoord);
-            }
-        }
+        _regionStorage.QueryChunks(_visibleChunks.ToArray());
 
         return TextCommandResult.Success("Redrawing map...");
     }
@@ -155,7 +128,7 @@ public class RegionMapLayer : MapLayer
             ElementStdBounds.AutosizedMainDialog
             .WithFixedPosition(
                 compo.Bounds.renderX / RuntimeEnv.GUIScale - 210,
-                (compo.Bounds.renderY + compo.Bounds.OuterHeight) / RuntimeEnv.GUIScale - 206
+                (compo.Bounds.renderY + compo.Bounds.OuterHeight) / RuntimeEnv.GUIScale - (HasAnyPrivilege() ? 206 : 116)
             )
             .WithAlignment(EnumDialogArea.None)
         ;
@@ -175,19 +148,22 @@ public class RegionMapLayer : MapLayer
                 .BeginChildElements(bgBounds)
                     .AddStaticText(Lang.Get("regions-alpha"), CairoFont.WhiteDetailText(), leftColumn = leftColumn.BelowCopy(0, 5).WithFixedHeight(16))
                     .AddSlider((newValue) => { _config.OverlayAlpha = newValue / 100.0f; return true; }, leftColumn = leftColumn.BelowCopy(0, 5).WithFixedHeight(25), "alpha-slider")
-                    .AddStaticText(Lang.Get("regions-brush-size"), CairoFont.WhiteDetailText(), leftColumn = leftColumn.BelowCopy(0, 5).WithFixedHeight(16))
-                    .AddSlider((newValue) => { _config.BrushSize = newValue; return true; }, leftColumn = leftColumn.BelowCopy(0, 5).WithFixedHeight(25), "brush-slider")
-                    .AddStaticText(Lang.Get("regions-lock-region"), CairoFont.WhiteDetailText(), leftColumn.BelowCopy(0, 8).WithFixedWidth(130).WithFixedOffset(0, 6))
-                    .AddSwitch((newValue) => { _config.LockUnselectedRegions = newValue; }, (leftColumn = leftColumn.BelowCopy(0, 8)).WithFixedOffset(130, 0), "lock-switch")
+                    .AddIf(HasAnyPrivilege())
+                        .AddStaticText(Lang.Get("regions-brush-size"), CairoFont.WhiteDetailText(), leftColumn = leftColumn.BelowCopy(0, 5).WithFixedHeight(16))
+                        .AddSlider((newValue) => { _config.BrushSize = newValue; return true; }, leftColumn = leftColumn.BelowCopy(0, 5).WithFixedHeight(25), "brush-slider")
+                        .AddStaticText(Lang.Get("regions-lock-region"), CairoFont.WhiteDetailText(), leftColumn.BelowCopy(0, 8).WithFixedWidth(130).WithFixedOffset(0, 6))
+                        .AddSwitch((newValue) => { _config.LockUnselectedRegions = newValue; }, (leftColumn = leftColumn.BelowCopy(0, 8)).WithFixedOffset(130, 0), "lock-switch")
+                    .EndIf()
                 .EndChildElements()
                 .Compose()
         ;
 
         guiDialogWorldMap.Composers[key].GetSlider("alpha-slider").SetValues((int)(_config.OverlayAlpha * 100), 0, 100, 1);
-        guiDialogWorldMap.Composers[key].GetSlider("brush-slider").SetValues(_config.BrushSize, 1, 9, 2);
-        guiDialogWorldMap.Composers[key].GetSwitch("lock-switch").SetValue(_config.LockUnselectedRegions);
-
-        guiDialogWorldMap.Composers[key].Enabled = true;
+        if(HasAnyPrivilege())
+        {
+            guiDialogWorldMap.Composers[key].GetSlider("brush-slider").SetValues(_config.BrushSize, 1, 9, 2);
+            guiDialogWorldMap.Composers[key].GetSwitch("lock-switch").SetValue(_config.LockUnselectedRegions);
+        }
     }
 
     public override void Render(GuiElementMap mapElem, float dt)
@@ -220,11 +196,6 @@ public class RegionMapLayer : MapLayer
                         toRemoveComp.RemoveChunk(chunkRegion.ChunkPos);
                         if(toRemoveComp.IsEmpty)
                         {
-                            _regionsToSend.Enqueue(new RegionOp
-                            {
-                                operation = Operation.Delete,
-                                regionId = toRemoveComp.RegionId,
-                            });
                             _chunkComponents.Remove(toRemoveComp);
 
                             if(toRemoveComp.RegionId == SelectedComponentId)
@@ -274,7 +245,7 @@ public class RegionMapLayer : MapLayer
             }
         }
 
-        if(IsShiftPressed())
+        if(HasAnyPrivilege() && IsShiftPressed())
         {
             if (_hoverComponent is null)
             {
@@ -299,96 +270,7 @@ public class RegionMapLayer : MapLayer
         if (_genTimer < 0.1) return;
         _genTimer = 0;
 
-        SafeDequeueThrough(_regionsToSend, _regionsToSendLock, (RegionOp op) =>
-        {
-            switch(op.operation)
-            {
-                case Operation.Create:
-                    if(!_mapDB.CheckChunkPresent(op.chunkRegion.ChunkPos)) return;
-                    _regionDB.CreateNewRegion(op.chunkRegion);
-
-                    lock(_chunksToGenLock)
-                    {
-                        _chunksToGen.Enqueue(op.chunkRegion.ChunkPos);
-                    }
-                    break;
-                case Operation.Update:
-                    _regionDB.UpdateRegion(op.chunkRegion.Region);
-                    break;
-                case Operation.Delete:
-                    _regionDB.DeleteRegion(op.regionId);
-                    break;
-            }
-        });
-
-        SafeDequeueThrough(_chunksToSend, _chunksToSendLock, (ChunkRegionOp op) =>
-        {
-            if(op.toDelete)
-            {
-                _regionDB.DeleteChunkRegion(op.chunkCoords);
-            }
-            else
-            {
-                if(!_mapDB.CheckChunkPresent(op.chunkCoords)) return;
-                _regionDB.AddChunkToRegion(op.chunkCoords, op.regionId);
-            }
-
-            lock(_chunksToGenLock)
-            {
-                _chunksToGen.Enqueue(op.chunkCoords);
-            }
-        });
-
-        SafeDequeueThrough(_chunksToRetry, _chunksToRetryLock, (RetryChunkOp op) =>
-        {
-            if(op.tries < MaxGenRetries)
-            {
-                if(GenerateChunk(op.chunkCoords) || _config.DisableChunkRetries) return;
-
-                op.tries++;
-                lock(_chunksToRetryLock)
-                {
-                    _chunksToRetry.Enqueue(op);
-                }
-            }
-        });
-
-        SafeDequeueThrough(_chunksToGen, _chunksToGenLock, (FastVec2i chunkCoords) => GenerateChunk(chunkCoords));
-
-        void SafeDequeueThrough<T>(UniqueQueue<T> queue, object qlock, Action<T> onDequeueAction)
-        {
-            if(queue.Count > 0)
-            {
-                int q = queue.Count;
-                while(q-- > 0)
-                {
-                    T temp;
-
-                    if (mapSink.IsShuttingDown) break;
-
-                    lock (qlock)
-                    {
-                        if(queue.Count <= 0) break;
-                        temp = queue.Dequeue();
-                    }
-                    
-                    onDequeueAction.Invoke(temp);
-                }
-            }
-        }
-
-        bool GenerateChunk(FastVec2i chunkCoords)
-        {
-            if(!_mapDB.CheckChunkPresent(chunkCoords) && !WorldMapContext.KnownChunks.Contains(chunkCoords)) return false;
-            var chunkRegion = _regionDB.GetChunkRegion(chunkCoords);
-            if (chunkRegion != null)
-            {
-                _readyChunks.Enqueue(chunkRegion);
-                return true;
-            }
-
-            return false;
-        }
+        _regionStorage.OffThreadProcessQueues();
     }
 
     public override void OnViewChangedClient(List<FastVec2i> nowVisible, List<FastVec2i> nowHidden)
@@ -403,25 +285,19 @@ public class RegionMapLayer : MapLayer
             _visibleChunks.Remove(chunk);
         }
 
-        lock (_chunksToGenLock)
-        {
-            foreach (var chunkCoords in nowVisible)
-            {
-                _chunksToGen.Enqueue(chunkCoords);
-            }
-        }
+        _regionStorage.QueryChunks(nowVisible.ToArray());
     }
 
     public override void OnMouseUpClient(MouseEvent args, GuiElementMap mapElem)
     {
-        if (!base.Active)
+        if (!base.Active || !HasAnyPrivilege())
         {
             return;
         }
 
-        if (IsShiftPressed() && args.Button == EnumMouseButton.Left)
+        if (HasAnyPrivilege() && IsShiftPressed() && args.Button == EnumMouseButton.Left)
         {
-            if (_chunkToComponentMap.TryGetValue(_currentMouseChunkPos, out var comp))
+            if (_chunkToComponentMap.TryGetValue(_currentMouseChunkPos, out var comp) && HasOwnership(comp.Region))
             {
                 SelectedComponentId = comp.RegionId;
             }
@@ -432,11 +308,11 @@ public class RegionMapLayer : MapLayer
         }
         else if (IsShiftPressed() && args.Button == EnumMouseButton.Right && !_isDrawing)
         {
-            if(IsCtrlPressed())
+            if(HasPrivilege(ConfigManager.ShrinkRegionPrivilege) && IsCtrlPressed())
             {
                 RemoveChunkFromRegion(_currentMouseChunkPos);
             }
-            else if(SelectedComponentId != Guid.Empty)
+            else if(HasPrivilege(ConfigManager.ExpandRegionPrivilege) && SelectedComponentId != Guid.Empty)
             {
                 AddOrSwapChunkToRegion(_currentMouseChunkPos);
             }
@@ -444,10 +320,17 @@ public class RegionMapLayer : MapLayer
             {
                 if(_chunkToComponentMap.TryGetValue(_currentMouseChunkPos, out var editedComp))
                 {
-                    _editDialog = new GuiEditRegionDialog(capi, this, editedComp);
-                    _editDialog.TryOpen();
+                    if((
+                            HasPrivilege(ConfigManager.ChangeRegionPrivilege)
+                            || HasPrivilege(ConfigManager.DeleteRegionPrivilege)
+                        )
+                        && HasOwnership(editedComp.Region))
+                    {
+                        _editDialog = new GuiEditRegionDialog(capi, this, editedComp, HasPrivilege(ConfigManager.ChangeRegionPrivilege), HasPrivilege(ConfigManager.DeleteRegionPrivilege));
+                        _editDialog.TryOpen();
+                    }
                 }
-                else
+                else if(HasPrivilege(ConfigManager.CreateRegionPrivilege))
                 {
                     _addDialog = new GuiAddRegionDialog(capi, this, _currentMouseChunkPos);
                     _addDialog.TryOpen();
@@ -473,18 +356,28 @@ public class RegionMapLayer : MapLayer
         }
 
         _currentMouseChunkPos = getChunkCoordsOnMouse(args, mapElem);
+        foreach (var comp in _chunkComponents)
+        {
+            comp.OnMouseMove(_currentMouseChunkPos, mapElem, hoverText);
+        }
+
+        if(!HasAnyPrivilege())
+        {
+            return;
+        }
+
         if(IsShiftPressed())
         {
             if(_drawTimer > 0.1f && capi.Input.MouseButton.Right)
             {
                 _drawTimer = 0;
 
-                if(IsCtrlPressed())
+                if(HasPrivilege(ConfigManager.ShrinkRegionPrivilege) && IsCtrlPressed())
                 {
                     _isDrawing = true;
                     RemoveChunkFromRegion(_currentMouseChunkPos);
                 }
-                else if (SelectedComponentId != Guid.Empty)
+                else if (HasPrivilege(ConfigManager.ExpandRegionPrivilege) && SelectedComponentId != Guid.Empty)
                 {
                     _isDrawing = true;
                     AddOrSwapChunkToRegion(_currentMouseChunkPos);
@@ -498,10 +391,6 @@ public class RegionMapLayer : MapLayer
         SelectedComponentId = Guid.Empty;
         _hoverComponent = null;
 
-        lock (_chunksToGenLock)
-        {
-            _chunksToGen.Clear();
-        }
         _visibleChunks.Clear();
 
         ConfigManager.SaveModConfig(api);
@@ -510,11 +399,12 @@ public class RegionMapLayer : MapLayer
     public override void OnShutDown()
     {
         RegionMapComponent.DisposeStatic();
-        _regionDB?.Dispose();
+        _regionStorage.Dispose();
     }
 
     public override void Dispose()
     {
+        _regionStorage?.Dispose();
         ResetChunkComponents();
         ResetIconTextures();
         QuadModel?.Dispose();
@@ -525,8 +415,8 @@ public class RegionMapLayer : MapLayer
     public void CreateRegion(FastVec2i chunkCoords, int color, string name, string fillName)
     {
         var newRegionId = Guid.NewGuid();
-        _regionsToSend.Enqueue(new RegionOp {
-            chunkRegion = new ChunkRegion
+        _regionStorage.CreateRegion(
+            new ChunkRegion
             {
                 ChunkPos = chunkCoords,
                 Region = new Region
@@ -537,42 +427,27 @@ public class RegionMapLayer : MapLayer
                     Fill = fillName,
                 }
             }
-        });
+        );
         SelectedComponentId = newRegionId;
         AddOrSwapChunkToRegion(chunkCoords);
     }
 
     public void EditRegion(Guid regionId, int color, string name, string fillName)
     {
-        _regionsToSend.Enqueue(new RegionOp {
-            operation = Operation.Update,
-            chunkRegion = new ChunkRegion
+        _regionStorage.UpdateRegion(
+            new Region 
             {
-                Region = new Region 
-                {
-                    RegionId = regionId,
-                    Name = name,
-                    Color = color,
-                    Fill = fillName,
-                }
+                RegionId = regionId,
+                Name = name,
+                Color = color,
+                Fill = fillName,
             }
-        });
-        var editedComp = _chunkComponents.Find(x => x.RegionId == regionId);
-        if(editedComp is not null)
-        {
-            editedComp.Update(name, color, fillName);
-        }
+        );
     }
 
     public void DeleteRegion(Guid regionId)
     {
-        _regionsToSend.Enqueue(new RegionOp {
-            operation = Operation.Delete,
-            regionId = regionId,
-        });
-
-        _chunkComponents.RemoveAll(x => x.RegionId == regionId);
-        _chunkToComponentMap.RemoveAll((chunkCoords, comp) => comp.RegionId == regionId);
+        _regionStorage.DeleteRegion(regionId);
         if(SelectedComponentId == regionId)
         {
             SelectedComponentId = Guid.Empty;
@@ -610,33 +485,60 @@ public class RegionMapLayer : MapLayer
 
     private void AddOrSwapChunkToRegion(FastVec2i chunkCoords)
     {
+        var requestList = new List<FastVec2i>();
+
         foreach (var coord in getChunksInBrush(chunkCoords))
         {
-            if(!_config.LockUnselectedRegions || !_chunkToComponentMap.TryGetValue(coord, out _))
+            if(!_config.LockUnselectedRegions || !_chunkToComponentMap.TryGetValue(coord, out var comp))
             {
-                _chunksToSend.Enqueue(new ChunkRegionOp() {chunkCoords = coord, regionId = SelectedComponentId});
+                requestList.Add(coord);
             }
         }
+
+        _regionStorage.AddChunkToRegion(requestList.ToArray(), SelectedComponentId);
     }
 
     private void RemoveChunkFromRegion(FastVec2i chunkCoords)
     {
+        var requestList = new List<FastVec2i>();
+
         foreach (var coord in getChunksInBrush(chunkCoords))
         {
-            if(!_config.LockUnselectedRegions || (_chunkToComponentMap.TryGetValue(coord, out var comp) && comp.RegionId == SelectedComponentId))
+            if(_chunkToComponentMap.TryGetValue(coord, out var comp) && (!_config.LockUnselectedRegions || comp.RegionId == SelectedComponentId))
             {
-                _chunksToSend.Enqueue(new ChunkRegionOp() {toDelete = true, chunkCoords = coord});
+                requestList.Add(coord);
+            }
+        }
+
+        _regionStorage.DeleteChunkRegion(requestList.ToArray());
+    }
+
+    private void OnReadyChunks(IEnumerable<ChunkRegion> readyChunks)
+    {
+        foreach (var chunk in readyChunks)
+        {
+            _readyChunks.Enqueue(chunk);
+        }
+    }
+
+    private void OnRegionsUpdated(IEnumerable<Region> regions)
+    {
+        foreach (var region in regions)
+        {
+            var editedComp = _chunkComponents.Find(x => x.RegionId == region.RegionId);
+            if(editedComp is not null)
+            {
+                editedComp.Update(region.Name, region.Color, region.Fill);
             }
         }
     }
 
-    private void OnChunkDirty(Vec3i chunkCoord, IWorldChunk chunk, EnumChunkDirtyReason reason)
+    private void OnRegionsDeleted(IEnumerable<Guid> regionIds)
     {
-        if(reason == EnumChunkDirtyReason.MarkedDirty) return;
-        if(chunkCoord.Y > 0) return;
-        lock (_chunksToRetryLock)
+        foreach (var id in regionIds)
         {
-            _chunksToRetry.Enqueue(new RetryChunkOp(chunkCoord));
+            _chunkComponents.RemoveAll(x => x.RegionId == id);
+            _chunkToComponentMap.RemoveAll((chunkCoords, comp) => comp.RegionId == id);
         }
     }
 
@@ -711,35 +613,28 @@ public class RegionMapLayer : MapLayer
         return capi.Input.KeyboardKeyState[(int)GlKeys.ControlLeft];
     }
 
-    private struct RetryChunkOp
+    private bool HasOwnership(Region region)
     {
-        public RetryChunkOp(Vec3i chunkCoords)
-        {
-            this.chunkCoords = new FastVec2i(chunkCoords.X, chunkCoords.Z);
-        }
-
-        public int tries;
-        public FastVec2i chunkCoords;
+        return ClientStorageFactory.ClientSideOnly
+            || Player.HasPrivilege(ConfigManager.SuperRegionPrivilege)
+            || Player.PlayerUID == region.PlayerID;
     }
 
-    private struct ChunkRegionOp
+    private bool HasAnyPrivilege()
     {
-        public bool toDelete;
-        public FastVec2i chunkCoords;
-        public Guid regionId;
+        return ClientStorageFactory.ClientSideOnly
+            || Player.HasPrivilege(ConfigManager.SuperRegionPrivilege)
+            || Player.HasPrivilege(ConfigManager.CreateRegionPrivilege)
+            || Player.HasPrivilege(ConfigManager.ChangeRegionPrivilege)
+            || Player.HasPrivilege(ConfigManager.DeleteRegionPrivilege)
+            || Player.HasPrivilege(ConfigManager.ExpandRegionPrivilege)
+            || Player.HasPrivilege(ConfigManager.ShrinkRegionPrivilege);
     }
 
-    private struct RegionOp
+    private bool HasPrivilege(string name)
     {
-        public Operation operation;
-        public Guid regionId;
-        public ChunkRegion chunkRegion;
-    }
-
-    private enum Operation
-    {
-        Create,
-        Update,
-        Delete,
+        return ClientStorageFactory.ClientSideOnly
+            || Player.HasPrivilege(ConfigManager.SuperRegionPrivilege)
+            || Player.HasPrivilege(name);
     }
 }

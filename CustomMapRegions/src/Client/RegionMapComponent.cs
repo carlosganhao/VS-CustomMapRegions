@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
-using CustomMapRegions.Common;
+using System.Text;
+using CustomMapRegions.Common.Models;
 using CustomMapRegions.Config;
 using Vintagestory.API.Client;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.Common;
 using Vintagestory.GameContent;
-using Region = CustomMapRegions.Common.Region;
+using Region = CustomMapRegions.Common.Models.Region;
 
 namespace CustomMapRegions.Client;
 
@@ -28,6 +29,10 @@ public class RegionMapComponent : MapComponent
     public bool IsEmpty
     {
         get { return _chunks.Count == 0; }
+    }
+    public bool IsRegionOwned
+    {
+        get { return Region.PlayerID == _mapLayer.Player.PlayerUID; }
     }
 
     private bool _selected;
@@ -98,6 +103,23 @@ public class RegionMapComponent : MapComponent
         _selected = this.RegionId == _mapLayer.SelectedComponentId;
         RenderChunks(map, dt);
         RenderNamePlate(map, dt);
+    }
+
+    public void OnMouseMove(FastVec2i chunkPos, GuiElementMap mapElem, StringBuilder hoverText)
+    {
+        if(_mapLayer.Player.PlayerUID != Region.PlayerID 
+            || !MouseWithinBounds()
+            || !_chunks.Contains(chunkPos)) return;
+
+        hoverText.AppendLine($"You own this region");
+
+        bool MouseWithinBounds()
+        {
+            return _bounds.x1 <= chunkPos.X
+                && _bounds.x2 >= chunkPos.X
+                && _bounds.y1 <= chunkPos.Y
+                && _bounds.y2 >= chunkPos.Y;
+        }
     }
 
     public bool IsVisible(HashSet<FastVec2i> visibleChunks)
