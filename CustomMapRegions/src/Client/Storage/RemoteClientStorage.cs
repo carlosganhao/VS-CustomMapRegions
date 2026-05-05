@@ -35,7 +35,7 @@ public class RemoteClientStorage : AbstractClientStorage
 
     public override void QueryChunks(FastVec2i[] chunkCoords)
     {
-        lock(_chunksToGen)
+        lock(_chunksToGenLock)
         {
             foreach (var chunkCoord in chunkCoords)
             {
