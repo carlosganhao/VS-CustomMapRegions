@@ -8,7 +8,7 @@
         "cooli2"
     ],
     "description": "Give names to areas, create user drawn regions on your map.",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "dependencies": {
         "game": "1.21.0"
     },
