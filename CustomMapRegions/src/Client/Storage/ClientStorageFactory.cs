@@ -8,7 +8,7 @@ namespace CustomMapRegions.Client.Storage;
 public static class ClientStorageFactory
 {
     public static bool IsSinglePlayer;
-    public static bool ClientSideOnly => IsSinglePlayer || ClientNetworkChannel is null || !ClientNetworkChannel.Connected;
+    public static bool ClientSideOnly => ClientNetworkChannel is null || !ClientNetworkChannel.Connected;
     public static IClientNetworkChannel ClientNetworkChannel { get; internal set; }
 
     public static void Init(ICoreClientAPI capi)
