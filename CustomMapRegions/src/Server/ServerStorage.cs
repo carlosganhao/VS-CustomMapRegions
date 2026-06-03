@@ -18,6 +18,8 @@ namespace CustomMapRegions.Server;
 
 public class ServerStorage
 {
+    private const uint MaxAttempts = 3;
+
     private ICoreServerAPI _api;
     private IServerNetworkChannel _networkChannel;
     private Thread _processThread;
@@ -269,6 +271,16 @@ public class ServerStorage
             }
             else
             {
+                if(!RegionExists(msg.regionId))
+                {
+                    if(smsg.attempt < MaxAttempts)
+                    {
+                        smsg.attempt++;
+                        _chunksReceived.Enqueue(smsg);
+                    }
+                    return;
+                }
+
                 if(!HasPrivilege(smsg.fromPlayer, ConfigManager.ExpandRegionPrivilege) || !IsActionAllowed(msg.chunkCoords, smsg.fromPlayer) || !IsActionAllowed(msg.regionId, smsg.fromPlayer)) return;
                 _regionDB.AddChunkToRegion(msg.chunkCoords, msg.regionId);
             }
@@ -389,7 +401,15 @@ public class ServerStorage
         }
 
         var playerData = _api.PlayerData.GetPlayerDataByUid(region.PlayerID);
-        var roleCode = playerData.RoleCode;
+        string roleCode;
+        if(playerData is not null)
+        {
+            roleCode = playerData.RoleCode;
+        }
+        else
+        {
+            roleCode = _api.Server.Config.DefaultRoleCode;
+        }
         var role = _api.Permissions.GetRole(roleCode);
         return player.Role.IsSuperior(role);
     }
@@ -405,5 +425,10 @@ public class ServerStorage
         ChunkRegion chunkRegion = _regionDB.GetChunkRegion(chunkPos);
         Region region = chunkRegion.Region;
         return region.RegionId != Guid.Empty ? IsActionAllowed(region, player) : true;
+    }
+    
+    private bool RegionExists(Guid regionId)
+    {
+        return _regionDB.GetRegion(regionId) is not null;
     }
 }
