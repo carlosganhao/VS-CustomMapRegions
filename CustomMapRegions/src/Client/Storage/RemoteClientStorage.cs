@@ -151,7 +151,6 @@ public class RemoteClientStorage : AbstractClientStorage
         {
             lock(_readyChunksLock)
             {
-                _api.Logger.Debug($"OffThread Remote: {_readyChunks.Count}");
                 InvokeOnChunkRegionsReceived(_readyChunks.Where(x => _mapDB.CheckChunkPresent(x.ChunkPos)));
                 _readyChunks.Clear();
             }
@@ -166,7 +165,6 @@ public class RemoteClientStorage : AbstractClientStorage
     {
         lock(_readyChunksLock)
         {
-            _api.Logger.Debug($"Chunk Regions Recieved: {readyChunkRegions.chunkRegions.Length}");
             foreach (var chunkRegion in readyChunkRegions.chunkRegions)
             {
                 _readyChunks.Enqueue(chunkRegion);

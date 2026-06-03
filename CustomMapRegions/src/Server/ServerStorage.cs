@@ -18,6 +18,8 @@ namespace CustomMapRegions.Server;
 
 public class ServerStorage
 {
+    private const uint MaxAttempts = 3;
+
     private ICoreServerAPI _api;
     private IServerNetworkChannel _networkChannel;
     private Thread _processThread;
@@ -30,11 +32,15 @@ public class ServerStorage
     private UniqueQueue<ChunkRequestServerMsg> _chunksRequested = new();
     private object _chunksToPushLock = new();
     private UniqueQueue<ChunkRequestServerMsg> _chunksToPush = new();
+    private object _chunksToRetryLock = new();
+    private UniqueQueue<ChunkRequestServerMsg> _chunksToRetry = new();
     private List<Region> _updatedRegions = new();
     private List<Guid> _deletedRegions = new();
 
     private Dictionary<IServerPlayer, IList<ChunkRegion>> _readyToSendChunks = new();
     private List<ChunkRegion> _readyToPushChunks = new();
+
+    private Dictionary<Guid, bool> _regionsExistanceCache = new ();
 
     private RegionDB _regionDB;
     public string getRegionDbFilePath()
@@ -269,6 +275,16 @@ public class ServerStorage
             }
             else
             {
+                if(!RegionExists(msg.regionId))
+                {
+                    if(smsg.attempt < MaxAttempts)
+                    {
+                        smsg.attempt++;
+                        _chunksReceived.Enqueue(smsg);
+                    }
+                    return;
+                }
+
                 if(!HasPrivilege(smsg.fromPlayer, ConfigManager.ExpandRegionPrivilege) || !IsActionAllowed(msg.chunkCoords, smsg.fromPlayer) || !IsActionAllowed(msg.regionId, smsg.fromPlayer)) return;
                 _regionDB.AddChunkToRegion(msg.chunkCoords, msg.regionId);
             }
@@ -389,7 +405,15 @@ public class ServerStorage
         }
 
         var playerData = _api.PlayerData.GetPlayerDataByUid(region.PlayerID);
-        var roleCode = playerData.RoleCode;
+        string roleCode;
+        if(playerData is not null)
+        {
+            roleCode = playerData.RoleCode;
+        }
+        else
+        {
+            roleCode = _api.Server.Config.DefaultRoleCode;
+        }
         var role = _api.Permissions.GetRole(roleCode);
         return player.Role.IsSuperior(role);
     }
@@ -405,5 +429,15 @@ public class ServerStorage
         ChunkRegion chunkRegion = _regionDB.GetChunkRegion(chunkPos);
         Region region = chunkRegion.Region;
         return region.RegionId != Guid.Empty ? IsActionAllowed(region, player) : true;
+    }
+    
+    private bool RegionExists(Guid regionId)
+    {
+        if(!_regionsExistanceCache.TryGetValue(regionId, out bool exists))
+        {
+            exists = _regionDB.GetRegion(regionId) is not null;
+            _regionsExistanceCache.TryAdd(regionId, exists);
+        }
+        return exists;
     }
 }

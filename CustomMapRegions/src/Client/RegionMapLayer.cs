@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using Cairo;
@@ -308,6 +309,7 @@ public class RegionMapLayer : MapLayer
         }
         else if (IsShiftPressed() && args.Button == EnumMouseButton.Right && !_isDrawing)
         {
+            api.Logger.Debug($"Shift RMB pressed. SelectedComponentId: {SelectedComponentId}; Chunk: {_currentMouseChunkPos}; Knows Chunk: {WorldMapContext.KnownChunks.Contains(_currentMouseChunkPos)}");
             if(HasPrivilege(ConfigManager.ShrinkRegionPrivilege) && IsCtrlPressed())
             {
                 RemoveChunkFromRegion(_currentMouseChunkPos);
@@ -318,6 +320,7 @@ public class RegionMapLayer : MapLayer
             }
             else if(SelectedComponentId == Guid.Empty && WorldMapContext.KnownChunks.Contains(_currentMouseChunkPos))
             {
+                api.Logger.Debug($"HasPrivilege to open dialog: {HasPrivilege(ConfigManager.CreateRegionPrivilege)}");
                 if(_chunkToComponentMap.TryGetValue(_currentMouseChunkPos, out var editedComp))
                 {
                     if((
@@ -332,6 +335,7 @@ public class RegionMapLayer : MapLayer
                 }
                 else if(HasPrivilege(ConfigManager.CreateRegionPrivilege))
                 {
+                    api.Logger.Debug($"Dialog opening");
                     _addDialog = new GuiAddRegionDialog(capi, this, _currentMouseChunkPos);
                     _addDialog.TryOpen();
                 }

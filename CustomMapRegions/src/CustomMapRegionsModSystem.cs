@@ -22,10 +22,12 @@ public class CustomMapRegionsModSystem : ModSystem
 
         if(api.Side == EnumAppSide.Client)
         {
+            api.Logger.Debug($"[custommmapregions] - Harmony can be loaded?: {!Harmony.HasAnyPatches(patchId)}");
             if(!Harmony.HasAnyPatches(patchId))
             {
                 harmonyInstance = new Harmony(patchId);
                 harmonyInstance.PatchAll();
+                api.Logger.Debug($"[custommmapregions] - Harmony loaded");
             }
         }
     }

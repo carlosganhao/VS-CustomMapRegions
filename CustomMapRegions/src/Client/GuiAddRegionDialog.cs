@@ -81,6 +81,8 @@ public class GuiAddRegionDialog : GuiDialogGeneric
 
         SingleComposer.ColorListPickerSetValue("colorpicker", 0);
         SingleComposer.IconListPickerSetValue("fillpicker", 0);
+
+        capi.Logger.Debug($"Dialog opening");
     }
 
     private void onColorSelected(int index)

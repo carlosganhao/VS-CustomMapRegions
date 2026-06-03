@@ -7,4 +7,5 @@ public struct ChunkRegionServerMsg
 {
     public ChunkRegionMsg msg;
     public IServerPlayer fromPlayer;
+    public uint attempt;
 }
