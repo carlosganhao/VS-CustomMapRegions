@@ -12,26 +12,12 @@ namespace CustomMapRegions;
 
 public class CustomMapRegionsModSystem : ModSystem
 {
-    private string patchId = "customMapRegions";
-    private Harmony harmonyInstance;
     private ServerStorage serverStorage;
-
-    public override void StartPre(ICoreAPI api)
-    {
-        base.StartPre(api);
-
-        if(api.Side == EnumAppSide.Client)
-        {
-            if(!Harmony.HasAnyPatches(patchId))
-            {
-                harmonyInstance = new Harmony(patchId);
-                harmonyInstance.PatchAll();
-            }
-        }
-    }
 
     public override void StartClientSide(ICoreClientAPI api)
     {
+        new Harmony(Mod.Info.ModID).PatchAll();
+                
         Mod.Logger.Notification("[Custom Map Regions] - Loaded client side version");
         ConfigManager.LoadModConfig(api);
         ClientStorageFactory.Init(api);
@@ -49,7 +35,7 @@ public class CustomMapRegionsModSystem : ModSystem
     {
         ConfigManager.ConfigInstance = null;
         serverStorage?.Dispose();
-        harmonyInstance?.UnpatchAll(patchId);
+        new Harmony(Mod.Info.ModID).UnpatchAll();
         base.Dispose();
     }
 }
